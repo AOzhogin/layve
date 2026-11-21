@@ -7,10 +7,25 @@ import (
 
 	apiimage "github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/client"
+	"github.com/moby/moby/client/pkg/versions"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/AOzhogin/layve/internal/pkg/imagearchive"
 )
+
+// manifestsAPI is the first API version that lists an image's manifests.
+const manifestsAPI = "1.48"
+
+// apiBelow reports whether the daemon speaks an API older than version.
+// Negotiation normally waits for the first request; ping makes it happen
+// now so the right options can be chosen.
+func (r *Images) apiBelow(ctx context.Context, version string) (bool, error) {
+	if _, err := r.cli.Ping(ctx, client.PingOptions{NegotiateAPIVersion: true}); err != nil {
+		return false, fmt.Errorf("ping: %w", err)
+	}
+	v := r.cli.ClientVersion()
+	return v != "" && versions.LessThan(v, version), nil
+}
 
 // localPlatform picks the platform to read an image as.
 //
@@ -22,7 +37,14 @@ import (
 // another one is present — e.g. after pulling linux/arm64 on an amd64 host.
 // The daemon's own platform wins when it is available, otherwise the first
 // pulled image manifest.
+//
+// Daemons older than API 1.48 (Docker 28) cannot list manifests and have no
+// partly pulled indexes either; they get nil and behave as before.
 func (r *Images) localPlatform(ctx context.Context, name string) (*ocispec.Platform, error) {
+	old, err := r.apiBelow(ctx, manifestsAPI)
+	if err != nil || old {
+		return nil, err
+	}
 	res, err := r.cli.ImageInspect(ctx, name, client.ImageInspectWithManifests(true))
 	if err != nil {
 		return nil, fmt.Errorf("inspect %s: %w", name, err)
