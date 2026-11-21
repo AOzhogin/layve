@@ -96,8 +96,9 @@ fmt: ## Format code (gofmt + goimports)
 
 .PHONY: fmt-check
 fmt-check: ## Fail if code is not formatted
-	@out="$$($(LINT) fmt --diff 2>&1)"; \
-	if [ -n "$$out" ]; then echo "$$out"; echo "run: make fmt"; exit 1; fi
+	@# The exit code tells: 1 with a diff on stdout when files need
+	@# formatting. stderr may carry "go: downloading" lines on a cold cache.
+	@$(LINT) fmt --diff || { echo "run: make fmt"; exit 1; }
 
 .PHONY: vet
 vet: ## go vet
