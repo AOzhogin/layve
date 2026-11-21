@@ -136,6 +136,10 @@ release:
     name: layve
   # v1.2.3-rc.1 and similar become pre-releases.
   prerelease: auto
+  # The annotation of the tag ("git tag -a") opens the release notes; the
+  # changelog follows.
+  header: |
+    {{ .TagContents }}
   footer: |
     **Verify a download:**
     ```sh
