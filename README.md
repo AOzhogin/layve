@@ -418,6 +418,13 @@ changed layer tarballs (following the OCI whiteout rules for deletions), updates
 the config and manifest, and streams the archive into `docker load`. The
 temporary directory is removed afterwards.
 
+Both Docker image stores are supported: the classic one and the containerd
+image store, the default since Docker 29. With the latter a tag names a whole
+multi-platform index of which often only one platform is pulled; layve reads,
+edits, saves and copies the platform that is present locally (the machine's
+own when available), so an image pulled for `linux/arm64` on an amd64 host
+works like any other.
+
 ## Limitations
 
 - **Command text stays in the history.** Removing a file does not touch the
@@ -444,6 +451,7 @@ make check         # fmt-check, vet, golangci-lint, tests with -race, govulnchec
 make integration   # edits nginx:1.27-alpine on the local daemon, queries Docker Hub
 make smoke         # the CLI end to end, as a pipeline would use it
 make remote        # round trip through a throwaway Debian host over ssh
+make integration-containerd  # integration + smoke on Docker 29's containerd image store
 make cross         # binaries for Linux, macOS and Windows into dist/
 make fmt           # gofmt + goimports
 ```

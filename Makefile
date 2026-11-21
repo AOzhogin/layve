@@ -83,6 +83,26 @@ remote: ## Round trip through a throwaway Debian host over ssh (Docker needed)
 		[ $$status -eq 0 ] || docker logs layve-remote 2>&1 | tail -50; \
 		docker rm -f layve-remote >/dev/null 2>&1; exit $$status
 
+# Docker 29 keeps images in the containerd store by default; the classic
+# store and the containerd one behave differently for multi-platform images.
+DIND_IMAGE ?= docker:29-dind
+DIND_PORT  ?= 23750
+
+.PHONY: integration-containerd
+integration-containerd: build ## Integration + smoke tests on Docker 29 with the containerd image store (dind)
+	@docker rm -f layve-dind >/dev/null 2>&1 || true
+	@docker run -d --privileged --name layve-dind -p 127.0.0.1:$(DIND_PORT):2375 \
+		-e DOCKER_TLS_CERTDIR= $(DIND_IMAGE) >/dev/null
+	@export DOCKER_HOST=tcp://127.0.0.1:$(DIND_PORT); i=0; \
+		until docker info >/dev/null 2>&1; do \
+			i=$$((i + 1)); [ $$i -lt 60 ] || { docker logs layve-dind; docker rm -f layve-dind; exit 1; }; sleep 1; \
+		done; \
+		docker info --format 'Docker {{.ServerVersion}}, storage {{.Driver}} {{.DriverStatus}}'; \
+		docker pull -q $(TEST_IMAGE) >/dev/null && \
+		LAYVE_INTEGRATION=1 $(GO) test -count=1 -run Integration ./internal/adapter/docker/ && \
+		test/cli/smoke.sh $(BIN); \
+		status=$$?; docker rm -f layve-dind >/dev/null 2>&1; exit $$status
+
 .PHONY: smoke
 smoke: build ## CLI end-to-end test against the local Docker daemon
 	@docker image inspect $(TEST_IMAGE) >/dev/null 2>&1 || docker pull $(TEST_IMAGE)

@@ -28,7 +28,7 @@ func (r *Images) Inspect(ctx context.Context, id image.ID, progress func(read in
 	if err != nil {
 		return nil, err
 	}
-	stream, err := r.cli.ImageSave(ctx, []string{id.String()})
+	stream, err := r.save(ctx, []string{id.String()})
 	if err != nil {
 		return nil, fmt.Errorf("save %s: %w", id.Short(), err)
 	}
@@ -138,7 +138,7 @@ func (r *Images) Write(ctx context.Context, id image.ID, plan image.EditPlan, re
 	defer os.RemoveAll(dir)
 
 	report("exporting image")
-	stream, err := r.cli.ImageSave(ctx, []string{id.String()})
+	stream, err := r.save(ctx, []string{id.String()})
 	if err != nil {
 		return fmt.Errorf("save %s: %w", id.Short(), err)
 	}

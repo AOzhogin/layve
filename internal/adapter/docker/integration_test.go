@@ -15,6 +15,7 @@ import (
 	"github.com/AOzhogin/layve/internal/pkg/dockerctx"
 
 	"github.com/moby/moby/client"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/AOzhogin/layve/internal/domain/image"
 )
@@ -268,7 +269,10 @@ func TestIntegrationPullPlatform(t *testing.T) {
 	if err := r.Pull(ctx, ref, arm, func(done, total int64) { last = [2]int64{done, total} }); err != nil {
 		t.Fatal(err)
 	}
-	insp, err := r.cli.ImageInspect(ctx, name)
+	// Ask for the platform explicitly: with the containerd image store the
+	// tag names a multi-platform index, and an inspect without a platform
+	// may describe the daemon's own platform, which was not pulled.
+	insp, err := r.cli.ImageInspect(ctx, name, client.ImageInspectWithPlatform(&ocispec.Platform{OS: "linux", Architecture: "arm64"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,5 +285,82 @@ func TestIntegrationPullPlatform(t *testing.T) {
 	missing, _ := image.ParseReference("layve-does-not-exist/nope:1")
 	if err := r.Pull(ctx, missing, native, nil); err == nil {
 		t.Error("expected an error for a missing image")
+	}
+}
+
+// TestIntegrationForeignPlatform reads, edits and exports an image of
+// another architecture. With the containerd image store this only works
+// when layve names the platform that was pulled.
+func TestIntegrationForeignPlatform(t *testing.T) {
+	if os.Getenv("LAYVE_INTEGRATION") == "" {
+		t.Skip("set LAYVE_INTEGRATION=1 to run against the local daemon")
+	}
+	r, err := NewImages()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	const (
+		name   = "hello-world:latest"
+		edited = "layve-it:foreign"
+		native = "nginx:1.27-alpine"
+	)
+	t.Cleanup(func() {
+		for _, n := range []string{edited, name} {
+			_, _ = r.cli.ImageRemove(context.Background(), n, client.ImageRemoveOptions{Force: true, PruneChildren: true})
+		}
+	})
+	ref, _ := image.ParseReference(name)
+	arm, _ := registry.ParsePlatform("linux/arm64/v8")
+	if err := r.Pull(ctx, ref, arm, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	img, err := r.Find(ctx, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, err := r.Inspect(ctx, img.ID(), nil)
+	if err != nil {
+		t.Fatalf("inspect foreign image: %v", err)
+	}
+	details, err := in.Details(image.EditPlan{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := len(details) - 1
+	for last > 0 && details[last].Layer().Empty() {
+		last--
+	}
+	found := false
+	for _, c := range details[last].Changes() {
+		found = found || c.Path() == "hello"
+	}
+	if !found {
+		t.Fatalf("no /hello in the layer: %+v", details[last].Changes())
+	}
+
+	put, _ := image.PutFile(last, "etc/note.txt", []byte("edited\n"), 0o644, 0, 0)
+	editedRef, _ := image.ParseReference(edited)
+	if err := r.Write(ctx, img.ID(), image.EditPlan{}.With(put), editedRef, image.WriteOptions{}, nil); err != nil {
+		t.Fatalf("write foreign image: %v", err)
+	}
+	insp, err := r.cli.ImageInspect(ctx, edited, client.ImageInspectWithPlatform(&ocispec.Platform{OS: "linux", Architecture: "arm64"}))
+	if err != nil || insp.Architecture != "arm64" {
+		t.Fatalf("edited image: arch %q, err %v", insp.Architecture, err)
+	}
+
+	// A foreign and a native image in one archive, and back.
+	nativeRef, _ := image.ParseReference(native)
+	rc, err := r.Export(ctx, []image.Target{image.ReferenceTarget(ref), image.ReferenceTarget(nativeRef)})
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	defer rc.Close()
+	if err := r.Import(ctx, rc); err != nil {
+		t.Fatalf("export and import a mixed-platform pair: %v", err)
 	}
 }

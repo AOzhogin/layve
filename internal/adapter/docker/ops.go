@@ -35,7 +35,15 @@ func (r *Images) Tag(ctx context.Context, source image.Target, ref image.Referen
 // History returns the build steps of an image, oldest first. It is fast but
 // cannot tell metadata-only steps apart from tiny layers; Inspect can.
 func (r *Images) History(ctx context.Context, id image.ID) ([]image.Layer, error) {
-	res, err := r.cli.ImageHistory(ctx, id.String())
+	platform, err := r.localPlatform(ctx, id.String())
+	if err != nil {
+		return nil, err
+	}
+	var opts []client.ImageHistoryOption
+	if platform != nil {
+		opts = append(opts, client.ImageHistoryWithPlatform(*platform))
+	}
+	res, err := r.cli.ImageHistory(ctx, id.String(), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("history %s: %w", id.Short(), err)
 	}

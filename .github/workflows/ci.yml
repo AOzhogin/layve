@@ -38,6 +38,11 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Docker on the runner
+        run: |
+          docker version
+          docker info --format 'storage: {{.Driver}} {{json .DriverStatus}}'
+
       # Edits nginx:1.27-alpine, loads the results into the runner's daemon,
       # runs containers from them and removes the test tags afterwards.
       - name: Integration tests
@@ -45,6 +50,21 @@ jobs:
 
       - name: CLI smoke test
         run: make smoke
+
+  containerd:
+    name: Integration on the containerd image store
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # Docker 29 in a container with its default containerd image store,
+      # whatever the runner's own daemon uses.
+      - name: Integration and smoke tests
+        run: make integration-containerd
 
   remote:
     name: Remote host over ssh

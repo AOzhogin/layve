@@ -68,7 +68,7 @@ func (r *Images) Export(ctx context.Context, targets []image.Target) (io.ReadClo
 	for i, t := range targets {
 		names[i] = t.String()
 	}
-	rc, err := r.cli.ImageSave(ctx, names)
+	rc, err := r.save(ctx, names)
 	if err != nil {
 		return nil, fmt.Errorf("export: %w", err)
 	}
