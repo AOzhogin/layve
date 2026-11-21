@@ -1,0 +1,48 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds, signs and publishes a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write     # create the release
+  id-token: write     # keyless cosign signing and provenance
+  attestations: write # build provenance
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the changelog needs the history
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Lint, test, vulnerability check
+        run: make check
+
+      - uses: sigstore/cosign-installer@v3
+      - uses: anchore/sbom-action/download-syft@v0
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/*.rpm
+            dist/*.apk
+            dist/checksums.txt

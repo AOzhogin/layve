@@ -1,0 +1,63 @@
+version: "2"
+
+run:
+  tests: true
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck, unused
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - nilerr
+    - noctx
+    - revive
+    - unconvert
+    - unparam
+  settings:
+    gosec:
+      excludes:
+        # layve runs the user's ssh client and $EDITOR on purpose.
+        - G204
+        # Reading and writing files the user names (archives, files to add).
+        - G304
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: indent-error-flow
+        - name: error-strings
+        - name: error-naming
+        - name: receiver-naming
+        - name: unused-parameter
+          disabled: true
+  exclusions:
+    presets:
+      - comments
+      - common-false-positives
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - noctx
+          - unparam
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/AOzhogin/layve
+
+issues:
+  # Show every finding at once instead of three of a kind.
+  max-issues-per-linter: 0
+  max-same-issues: 0
