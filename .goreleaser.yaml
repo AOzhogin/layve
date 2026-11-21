@@ -1,0 +1,147 @@
+# Release configuration: https://goreleaser.com
+# Releases are made by .github/workflows/release.yml when a v* tag is pushed.
+# Locally: "make release-check" validates this file, "make snapshot" builds
+# everything into dist/ without publishing.
+version: 2
+
+project_name: layve
+
+before:
+  hooks:
+    - go mod verify
+
+builds:
+  - id: layve
+    main: ./cmd/layve
+    binary: layve
+    # Same flags as "make build": static, no symbols or DWARF, no local paths,
+    # no embedded VCS data or build ID.
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    ldflags:
+      - -s -w -buildid= -X main.version={{ .Version }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+    # File times from the commit, so the same tag rebuilds byte for byte.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+
+nfpms:
+  - id: packages
+    package_name: layve
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Anton Ozhogin
+    maintainer: Anton Ozhogin
+    homepage: https://github.com/AOzhogin/layve
+    description: |-
+      Wash out what is buried in Docker image layers.
+      Finds space wasted on files that later layers hide, leftover secrets,
+      and lets you drop or merge layers and edit files without a rebuild;
+      interactively or as a CI step.
+    license: Apache-2.0
+    section: utils
+    formats: [deb, rpm, apk]
+    bindir: /usr/bin
+    # Timestamps inside the packages from the commit, for reproducibility.
+    mtime: "{{ .CommitDate }}"
+    suggests:
+      - openssh-client
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/layve/LICENSE
+        file_info:
+          mtime: "{{ .CommitDate }}"
+      - src: NOTICE
+        dst: /usr/share/doc/layve/NOTICE
+        file_info:
+          mtime: "{{ .CommitDate }}"
+      - src: README.md
+        dst: /usr/share/doc/layve/README.md
+        file_info:
+          mtime: "{{ .CommitDate }}"
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# An SPDX SBOM per archive and package (needs syft on PATH).
+sboms:
+  - id: archives
+    artifacts: archive
+  - id: packages
+    artifacts: package
+
+# Keyless signing of checksums.txt with cosign: GitHub's OIDC token proves
+# the release came from this repository's workflow; no keys to keep.
+# Verify with:
+#   cosign verify-blob --bundle checksums.txt.sigstore.json \
+#     --certificate-identity-regexp 'https://github.com/AOzhogin/layve/' \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+#     checksums.txt
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - --bundle=${signature}
+      - ${artifact}
+      - --yes
+    output: true
+
+# Builds without a tag: the version says which commit they come from.
+snapshot:
+  version_template: "{{ incpatch .Version }}-dev+{{ .ShortCommit }}"
+
+changelog:
+  use: git
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Other changes
+      order: 999
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - '^Merge '
+
+release:
+  github:
+    owner: AOzhogin
+    name: layve
+  # v1.2.3-rc.1 and similar become pre-releases.
+  prerelease: auto
+  footer: |
+    **Verify a download:**
+    ```sh
+    cosign verify-blob --bundle checksums.txt.sigstore.json \
+      --certificate-identity-regexp 'https://github.com/AOzhogin/layve/' \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+      checksums.txt
+    sha256sum --ignore-missing -c checksums.txt
+    ```
