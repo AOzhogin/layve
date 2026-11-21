@@ -56,45 +56,93 @@ problem and repairs the image directly.
 Requirements: access to a Docker daemon — the local socket, `DOCKER_HOST` or
 any Docker context.
 
-**Prebuilt binaries and packages** for Linux, macOS and Windows (amd64,
-arm64) are on the [releases page](https://github.com/AOzhogin/layve/releases):
+The current version is **1.0.0**. All files are on the
+[releases page](https://github.com/AOzhogin/layve/releases); the commands below
+download them directly. For ARM machines use the file named in the comment.
+
+### Debian, Ubuntu
 
 ```sh
-# Debian, Ubuntu
-sudo apt install ./layve_<version>_amd64.deb
-# Fedora, RHEL
-sudo dnf install ./layve-<version>-1.x86_64.rpm
-# Alpine
-sudo apk add --allow-untrusted ./layve_<version>_x86_64.apk
-# Anything else: unpack the archive and put layve on your PATH
-tar -xzf layve_<version>_linux_amd64.tar.gz layve
+curl -LO https://github.com/AOzhogin/layve/releases/download/v1.0.0/layve_1.0.0_amd64.deb
+sudo apt install ./layve_1.0.0_amd64.deb
+# arm64: layve_1.0.0_arm64.deb
 ```
+
+### Fedora, RHEL, openSUSE
+
+```sh
+curl -LO https://github.com/AOzhogin/layve/releases/download/v1.0.0/layve-1.0.0-1.x86_64.rpm
+sudo dnf install ./layve-1.0.0-1.x86_64.rpm
+# arm64: layve-1.0.0-1.aarch64.rpm; on openSUSE use zypper install
+```
+
+### Alpine
+
+```sh
+curl -LO https://github.com/AOzhogin/layve/releases/download/v1.0.0/layve_1.0.0_x86_64.apk
+sudo apk add --allow-untrusted ./layve_1.0.0_x86_64.apk
+# arm64: layve_1.0.0_aarch64.apk
+```
+
+### Other Linux distributions
+
+```sh
+curl -LO https://github.com/AOzhogin/layve/releases/download/v1.0.0/layve_1.0.0_linux_amd64.tar.gz
+tar -xzf layve_1.0.0_linux_amd64.tar.gz layve
+sudo install layve /usr/local/bin/
+# arm64: layve_1.0.0_linux_arm64.tar.gz
+```
+
+### macOS
+
+```sh
+curl -LO https://github.com/AOzhogin/layve/releases/download/v1.0.0/layve_1.0.0_darwin_arm64.tar.gz
+tar -xzf layve_1.0.0_darwin_arm64.tar.gz layve
+sudo install layve /usr/local/bin/
+# Intel Macs: layve_1.0.0_darwin_amd64.tar.gz
+```
+
+### Windows
+
+Download
+[layve_1.0.0_windows_amd64.zip](https://github.com/AOzhogin/layve/releases/download/v1.0.0/layve_1.0.0_windows_amd64.zip),
+unpack it and put `layve.exe` in a folder on your `PATH`.
+
+### With Go
+
+Go 1.27 or newer:
+
+```sh
+go install github.com/AOzhogin/layve/cmd/layve@v1.0.0
+```
+
+### From source
+
+```sh
+git clone https://github.com/AOzhogin/layve.git
+cd layve
+git checkout v1.0.0
+make build        # bin/layve
+```
+
+### Verifying a download
 
 Every release ships `checksums.txt` signed with [cosign](https://docs.sigstore.dev)
 (keyless, tied to this repository's release workflow), an SPDX SBOM for each
-file and GitHub build provenance. To verify a download:
+file and GitHub build provenance:
 
 ```sh
+curl -LO https://github.com/AOzhogin/layve/releases/download/v1.0.0/checksums.txt
+curl -LO https://github.com/AOzhogin/layve/releases/download/v1.0.0/checksums.txt.sigstore.json
 cosign verify-blob --bundle checksums.txt.sigstore.json \
   --certificate-identity-regexp 'https://github.com/AOzhogin/layve/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   checksums.txt
 sha256sum --ignore-missing -c checksums.txt
-gh attestation verify layve_<version>_linux_amd64.tar.gz --repo AOzhogin/layve
 ```
 
-**With Go** (1.27 or newer):
-
 ```sh
-go install github.com/AOzhogin/layve/cmd/layve@latest
-```
-
-**From source:**
-
-```sh
-git clone https://github.com/AOzhogin/layve.git
-cd layve
-make build        # bin/layve
+gh attestation verify layve_1.0.0_linux_amd64.tar.gz --repo AOzhogin/layve
 ```
 
 ## Usage
@@ -287,7 +335,7 @@ wrote registry.example.com/app:1.4 (1192804e289e); the previous image is kept as
 
 - name: Clean up the image
   run: |
-    go install github.com/AOzhogin/layve/cmd/layve@latest
+    go install github.com/AOzhogin/layve/cmd/layve@v1.0.0
     layve fix ghcr.io/acme/app:${{ github.sha }} --wasted --purge /root/.npmrc
     layve check ghcr.io/acme/app:${{ github.sha }} --max-wasted 5MB
 
@@ -401,7 +449,7 @@ make fmt           # gofmt + goimports
 ```
 
 Releases are made by [GoReleaser](https://goreleaser.com) from
-`.goreleaser.yaml`: pushing a tag such as `v0.2.0` runs the release workflow,
+`.goreleaser.yaml`: pushing a tag such as `v1.1.0` runs the release workflow,
 which checks and tests the code, builds the archives and `deb`/`rpm`/`apk`
 packages, signs the checksums, attaches SBOMs and provenance, and publishes the
 release with a changelog grouped by `feat:` / `fix:` commits. Builds are
@@ -410,7 +458,7 @@ reproducible: the same tag gives the same files.
 ```sh
 make release-check   # validate .goreleaser.yaml
 make snapshot        # build everything into dist/ without publishing
-git tag v0.2.0 && git push origin v0.2.0
+git tag v1.1.0 && git push origin v1.1.0
 ```
 
 `make remote` starts a Debian container with sshd and its own Docker daemon,
